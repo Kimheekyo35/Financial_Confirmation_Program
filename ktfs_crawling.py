@@ -1,18 +1,13 @@
 from playwright.sync_api import sync_playwright
 import json
-# 총 데이터가 26634건이 됨.
-# 여기에서 26634건을 가져오기 위해서는 페이지를 이동하면서 데이터를 가져와야 함.
-# search_input에서 value 값을 input_box_list에 넣고, 병렬로 데이터를 가져오도록 해야 함.
+import re
+import unicodedata
 
-# 모든 데이터 담기
-
-pass_value = [
-    '001', '002', '003', '004', '007', '008', '011', '012',
-    '020', '023', '027', '030', '031', '032', '034', '035',
-    '037', '039', '045', '048', '050', '052', '054', '055',
-    '057', '058', '059', '060', '061', '062', '063', '064',
-    '065'
-]
+# 데이터 저장할 때 정규화 진행하기
+def normalize_dictionary_data(text):
+    text = unicodedata.normalize("NFKC", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 with sync_playwright() as p:
     browser = p.chromium.launch(
@@ -30,7 +25,7 @@ with sync_playwright() as p:
 
     # option의 value값을 넣는 리스트 (ex: 수출입, 농협이 어떤 value를 가지고 있는지 확인)
     search_value_name_dict = {}
-
+    
     options = search_input.locator("option")
 
     for option in options.all():
@@ -45,8 +40,8 @@ with sync_playwright() as p:
 
     # 금융회사명 조회
     for value, name in search_value_name_dict.items():
-        if value in pass_value:
-            continue
+        # if value in pass_value:
+        #     continue
         all_data = []  # 각 금융회사명 조회 시마다 데이터를 담을 리스트 초기화
 
         search_input = page.locator("div[class='input_box'] > select[title='검색어 구분']")
@@ -63,7 +58,6 @@ with sync_playwright() as p:
         # 페이지 이동하면서 데이터 가져오기
         next_button = page.locator("button[aria-label='다음으로']")
         
-
         # 다음페이지 버튼 누를 수 있을 때까지 반복
         while True:
             # tr의 개수
@@ -84,18 +78,17 @@ with sync_playwright() as p:
                     continue
 
                 dictionary_data = {
-                    "bank_name": cleaned_data[0],
-                    "branch_name": cleaned_data[1],
-                    "branch_code" : cleaned_data[2],
-                    "address_code": cleaned_data[3],
-                    "address": cleaned_data[4],
-                    "call_number": cleaned_data[5],
-                    "fax_number" : cleaned_data[6],
-                    "separate" : cleaned_data[7]
+                    "bank_name": normalize_dictionary_data(cleaned_data[0]),
+                    "branch_name": normalize_dictionary_data(cleaned_data[1]),
+                    "branch_code": normalize_dictionary_data(cleaned_data[2]),
+                    "address_code": normalize_dictionary_data(cleaned_data[3]),
+                    "address": normalize_dictionary_data(cleaned_data[4]),
+                    "call_number": normalize_dictionary_data(cleaned_data[5]),
+                    "fax_number" : normalize_dictionary_data(cleaned_data[6]),
+                    "separate" : normalize_dictionary_data(cleaned_data[7])
                 }
 
                 all_data.append(dictionary_data)  # 데이터를 리스트에 추가
-
             
             # 현재 페이지 다 읽은 후, 다음 button이 disabled인지 확인하고, disabled이면 break
             if next_button.is_disabled():
@@ -104,7 +97,6 @@ with sync_playwright() as p:
             # 다음 페이지 버튼 클릭
             next_button.click()
             page.wait_for_timeout(1000)
-
 
         with open(f"financial_json_dir/{name}_{value}.json", "w", encoding="utf-8") as f:
             json.dump(all_data, f, ensure_ascii=False, indent=4)
